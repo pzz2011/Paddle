@@ -9,7 +9,7 @@ Welcome to the PaddlePaddle GitHub.
 PaddlePaddle (PArallel Distributed Deep LEarning) is an easy-to-use,
 efficient, flexible and scalable deep learning platform, which is originally
 developed by Baidu scientists and engineers for the purpose of applying deep
-learning to many products at Baidu.
+learning to many products at Baidu....
 
 Our vision is to enable deep learning for everyone via PaddlePaddle.
 Please refer to our [release log](https://github.com/baidu/Paddle/releases) to track the latest feature of PaddlePaddle. 
