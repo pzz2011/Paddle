@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -23,8 +23,8 @@ def deprecated(instead):
         @functools.wraps(func)
         def __wrapper__(*args, **kwargs):
             logger.warning("The interface %s is deprecated, "
-                           "will be removed soon. Please use %s instead."
-                           % (func.__name__, instead))
+                           "will be removed soon. Please use %s instead." %
+                           (func.__name__, instead))
 
             return func(*args, **kwargs)
 

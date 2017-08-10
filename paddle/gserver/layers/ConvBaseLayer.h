@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 Baidu, Inc. All Rights Reserve.
+/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserve.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,10 +12,10 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-
 #pragma once
 
 #include "Layer.h"
+#include "paddle/math/MathUtils.h"
 namespace paddle {
 
 /**
@@ -26,6 +26,9 @@ namespace paddle {
 class ConvBaseLayer : public Layer {
 protected:
   typedef std::vector<int> IntV;
+
+  /// True if it's deconv layer, false if it's convolution layer
+  bool isDeconv_;
 
   /// The number of filters.
   int numFilters_;
@@ -77,7 +80,8 @@ protected:
 public:
   explicit ConvBaseLayer(const LayerConfig& config) : Layer(config) {}
 
-  virtual bool init(const LayerMap& layerMap, const ParameterMap& parameterMap);
+  bool init(const LayerMap& layerMap,
+            const ParameterMap& parameterMap) override;
 
   /**
    * imgSizeH_ and imgSizeW_ will be set according to the previous input layers
@@ -87,31 +91,6 @@ public:
   virtual size_t calOutputSize();
 
   Weight& getWeight(int idx) { return *weights_[idx]; }
-
-  /**
-   * Calculate output size based on caffeMode_.
-   * - input(+padding): 0123456789
-   * - imageSize(+padding) = 10;
-   * - filterSize = 3;
-   * - stride = 2;
-   * - caffeMode_ is true:
-       - output: (012), (234), (456), (678)
-       - outputSize = 4;
-   * - caffeMode_ is false:
-   *   - output: (012), (234), (456), (678), (9)
-   *   - outputSize = 5;
-   */
-  int outputSize(int imageSize, int filterSize, int padding, int stride) {
-    int outputSize;
-    if (!caffeMode_) {
-     outputSize =
-          (imageSize - filterSize + 2 * padding + stride - 1) / stride + 1;
-    } else {
-      outputSize = (imageSize - filterSize + 2 * padding) / stride + 1;
-    }
-    CHECK_GE(outputSize, 1);
-    return outputSize;
-  }
 };
 
 }  // namespace paddle

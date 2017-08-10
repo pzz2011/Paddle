@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 Baidu, Inc. All Rights Reserve.
+/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserve.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,12 +12,11 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-
 #pragma once
 
-#include "paddle/parameter/Parameter.h"
-#include "ModelConfig.pb.h"
 #include "Layer.h"
+#include "ModelConfig.pb.h"
+#include "paddle/parameter/Parameter.h"
 
 namespace paddle {
 
@@ -28,6 +27,11 @@ namespace paddle {
     Projection::registrar_.registerClass<__class_name>(#__type_name); \
   })
 
+#define REGISTER_PROJECTION_CREATE_FUNC(__type_name, createFunction)    \
+  static InitFunction __reg_type_##__type_name([]() {                   \
+    Projection::registrar_.registerClass(#__type_name, createFunction); \
+  })
+
 /**
  * A projection takes one Argument as input, calculate the result and add it
  * to output Argument.
@@ -35,9 +39,11 @@ namespace paddle {
 class Projection {
 public:
   static Projection* create(const ProjectionConfig& config,
-                            ParameterPtr parameter, bool useGpu);
+                            ParameterPtr parameter,
+                            bool useGpu);
 
-  Projection(const ProjectionConfig& config, ParameterPtr parameter,
+  Projection(const ProjectionConfig& config,
+             ParameterPtr parameter,
              bool useGpu)
       : config_(config), parameter_(parameter), useGpu_(useGpu) {}
 
@@ -50,7 +56,8 @@ public:
       registrar_;
 
   /**
-   * Forward propagation. If backward() will be called, in and out must be kept valid until then.
+   * Forward propagation. If backward() will be called, in and out must be kept
+   * valid until then.
    * @param in input of projection
    * @param out output of projection
    * @param passType PASS_TRAIN of PASS_TEST
@@ -82,9 +89,35 @@ public:
   virtual LayerStatePtr getState() { return nullptr; }
 
   /**
+   * init forward_ and backward_ functions
+   */
+  virtual bool init() { return true; }
+
+  /**
    * Get output size of projection.
    */
   size_t getOutputSize() const { return config_.output_size(); }
+
+protected:
+  /**
+   * Create layer function. Function is called in forward or backward.
+   * \param function, Layer::forward_ or Layer::backward_
+   * \param name, function name
+   * \param config, initialization configuration for the function
+   */
+  void createFunction(std::vector<std::shared_ptr<FunctionBase>>& function,
+                      const std::string& name,
+                      const FuncConfig& config) {
+    if (useGpu_) {
+      function.emplace_back(
+          FunctionBase::funcRegistrar_.createByType(name + "-GPU"));
+    } else {
+      function.emplace_back(
+          FunctionBase::funcRegistrar_.createByType(name + "-CPU"));
+    }
+    auto& func = function.back();
+    func->init(config);
+  }
 
 protected:
   /// Config of projection
@@ -99,5 +132,9 @@ protected:
   const Argument* out_;
   /// Store `passType` passed to forward()
   PassType passType_;
+  /// Layer forward function
+  std::vector<std::shared_ptr<FunctionBase>> forward_;
+  /// Layer backward function
+  std::vector<std::shared_ptr<FunctionBase>> backward_;
 };
 }  // namespace paddle

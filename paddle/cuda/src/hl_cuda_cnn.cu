@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 Baidu, Inc. All Rights Reserve.
+/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserve.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,6 +16,7 @@ limitations under the License. */
 #include <float.h>
 #include "hl_base.h"
 #include "hl_cnn.h"
+#include "hl_device_functions.cuh"
 
 __global__ void KeFeature2col(size_t n, size_t height, const real* data_im,
                               size_t blockH, size_t blockW, size_t width,
@@ -152,7 +153,7 @@ __global__ void KeMaxPoolForward(const int nthreads, const real* inputData,
                                  const int ksizeW, const int ksizeH,
                                  const int strideH, const int strideW,
                                  const int offsetH, const int offsetW,
-                                 real* tgtData) {
+                                 real* tgtData, const int tgtStride) {
   int index =  blockIdx.x * blockDim.x + threadIdx.x;
   if (index < nthreads) {
     int pw = index % pooledW;
@@ -173,7 +174,9 @@ __global__ void KeMaxPoolForward(const int nthreads, const real* inputData,
           maxval = inputData[h * width + w];
       }
     }
-    tgtData[index] = maxval;
+    int tgtIndex = index % (pooledW * pooledH * channels) +
+        frameNum * tgtStride;
+    tgtData[tgtIndex] = maxval;
   }
 }
 
@@ -184,7 +187,7 @@ void hl_maxpool_forward(const int frameCnt, const real* inputData,
                         const int sizeX, const int sizeY,
                         const int strideH, const int strideW,
                         const int paddingH, const int paddingW,
-                        real* tgtData) {
+                        real* tgtData, const int tgtStride) {
 
   int num_kernels = pooledH * pooledW * channels * frameCnt;
   int blocks = (num_kernels + 1024 - 1) / 1024;
@@ -194,7 +197,7 @@ void hl_maxpool_forward(const int frameCnt, const real* inputData,
   KeMaxPoolForward<<< grid, threads, 0, STREAM_DEFAULT >>>
            (num_kernels, inputData, channels, height, width,
            pooledH, pooledW, sizeX, sizeY, strideH, strideW,
-           paddingH, paddingW, tgtData);
+           paddingH, paddingW, tgtData, tgtStride);
   CHECK_SYNC("hl_maxpool_forward failed");
 }
 
@@ -207,7 +210,7 @@ __global__ void KeMaxPoolBackward(const int nthreads, const real* inputData,
                                   const int strideH, const int strideW,
                                   const int padH, const int padW,
                                   real scaleA, real scaleB,
-                                  real* targetGrad) {
+                                  real* targetGrad, const int outStride) {
   int index = blockIdx.x  * blockDim.x + threadIdx.x;
   if (index < nthreads) {
     // find out the local index
@@ -223,8 +226,8 @@ __global__ void KeMaxPoolBackward(const int nthreads, const real* inputData,
     int pwend = offsetW >= 0 ? min(offsetW / strideW + 1, pooledW) : 0;
     real gradient = 0;
     real input = inputData[index];
-    outData += (frameNum * channels + offsetC) * pooledH * pooledW;
-    outGrad += (frameNum * channels + offsetC) * pooledH * pooledW;
+    outData += (frameNum * outStride + offsetC * pooledH * pooledW);
+    outGrad += (frameNum * outStride + offsetC * pooledH * pooledW);
     for (int ph = phstart; ph < phend; ++ph) {
       for (int pw = pwstart; pw < pwend; ++pw) {
         if (input == outData[ph * pooledW + pw]) {
@@ -246,7 +249,7 @@ void hl_maxpool_backward(const int frameCnt, const real* inputData,
                         const int strideH, const int strideW,
                         const int paddingH, const int paddingW,
                         real scaleA, real scaleB,
-                        real* targetGrad) {
+                        real* targetGrad, const int outStride) {
 
   int num_kernels = height * width * channels * frameCnt;
   int blocks = (num_kernels + 1024 - 1) / 1024;
@@ -257,7 +260,7 @@ void hl_maxpool_backward(const int frameCnt, const real* inputData,
            strideH, strideW,
            paddingH, paddingW,
            scaleA, scaleB,
-           targetGrad);
+           targetGrad, outStride);
   CHECK_SYNC("hl_maxpool_backward");
 }
 
@@ -268,7 +271,7 @@ __global__ void KeAvgPoolForward(const int nthreads, const real* inputData,
                                  const int sizeX, const int sizeY,
                                  const int strideH, const int strideW,
                                  const int padH, const int padW,
-                                 real* tgtData) {
+                                 real* tgtData, const int tgtStride) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index < nthreads) {
     int pw = index % pooledW;
@@ -293,7 +296,9 @@ __global__ void KeAvgPoolForward(const int nthreads, const real* inputData,
         aveval += inputData[h * width + w];
       }
     }
-    tgtData[index] = aveval / pool_size;
+    int tgtIndex = index % (pooledW * pooledH * channels) +
+        frameNum * tgtStride;
+    tgtData[tgtIndex] = aveval / pool_size;
   }
 }
 
@@ -303,14 +308,15 @@ void hl_avgpool_forward(const int frameCnt, const real* inputData,
                         const int pooledH, const int pooledW,
                         const int sizeX, const int sizeY,
                         const int strideH, const int strideW,
-                        const int paddingH, const int paddingW, real* tgtData) {
+                        const int paddingH, const int paddingW, 
+                        real* tgtData, const int tgtStride) {
   int num_kernels = pooledH * pooledW * channels * frameCnt;
   int blocks = (num_kernels + 1024 - 1) / 1024;
   KeAvgPoolForward<<< blocks, 1024, 0, STREAM_DEFAULT >>>
            (num_kernels, inputData, channels,
            height, width, pooledH, pooledW,
            sizeX, sizeY, strideH, strideW,
-           paddingH, paddingW, tgtData);
+           paddingH, paddingW, tgtData, tgtStride);
   CHECK_SYNC("hl_avgpool_forward failed");
 }
 
@@ -322,7 +328,7 @@ __global__ void KeAvgPoolBackward(const int nthreads, const real* outGrad,
                                   const int strideH, const int strideW,
                                   const int padH, const int padW,
                                   real scaleA, real scaleB,
-                                  real* tgtGrad) {
+                                  real* tgtGrad, const int outStride) {
   int index = blockIdx.x * blockDim.x + threadIdx.x;
   if (index < nthreads) {
     int offsetW = index % width + padW;
@@ -335,7 +341,8 @@ __global__ void KeAvgPoolBackward(const int nthreads, const real* outGrad,
     int phend = offsetH >= 0 ? min(offsetH / strideH + 1, pooledH) : 0;
     int pwend = offsetW >= 0 ? min(offsetW / strideW + 1, pooledW) : 0;
     real gradient = 0;
-    outGrad += (frameNum * channels + offsetC) * pooledH * pooledW;
+    outGrad += (frameNum * outStride + offsetC * pooledH * pooledW);
+
 
     for (int ph = phstart; ph < phend; ++ph) {
       for (int pw = pwstart; pw < pwend; ++pw) {
@@ -360,7 +367,7 @@ void hl_avgpool_backward(const int frameCnt, const real* outGrad,
                          const int strideH, const int strideW,
                          const int paddingH, const int paddingW,
                          real scaleA, real scaleB,
-                         real* backGrad) {
+                         real* backGrad, const int outStride) {
   int num_kernels = height * width * channels * frameCnt;
   int blocks = (num_kernels + 1024 - 1) / 1024;
 
@@ -370,166 +377,140 @@ void hl_avgpool_backward(const int frameCnt, const real* outGrad,
            strideH, strideW,
            paddingH, paddingW,
            scaleA, scaleB,
-           backGrad);
+           backGrad, outStride);
   CHECK_SYNC("hl_avgpool_backward failed");
 }
 
-__global__ void KeCMRNormFillScale(size_t nthreads, const real* in,
-                                   real* scale, size_t channels,
-                                   size_t height, size_t width, size_t size,
-                                   real alpha) {
-  size_t index = threadIdx.x + blockIdx.x * blockDim.x;
-  if (index < nthreads) {
-    // find out the local offset
-    size_t w = index % width;
-    size_t h = (index / width) % height;
-    size_t n = index / width / height;
-    size_t offset = (n * channels * height + h) * width + w;
-    size_t step = height * width;
-    in += offset;
-    scale += offset;
-    size_t head = 0;
-    size_t pre_pad = (size - 1) / 2;
-    size_t post_pad = size - pre_pad - 1;
-    real accum_scale = 0;
-    // fill the scale at [n, :, h, w]
-    // accumulate values
-    while (head < post_pad) {
-      accum_scale += in[head * step] * in[head * step];
-      ++head;
-    }
-    // until we reach size, nothing needs to be subtracted
-    while (head < size) {
-      accum_scale += in[head * step] * in[head * step];
-      scale[(head - post_pad) * step] = 1. + accum_scale * alpha;
-      ++head;
-    }
-    // both add and subtract
-    while (head < channels) {
-      accum_scale += in[head * step] * in[head * step];
-      accum_scale -= in[(head - size) * step] * in[(head - size) * step];
-      scale[(head - post_pad) * step] = 1. + accum_scale * alpha;
-      ++head;
-    }
-    // subtract only
-    while (head < channels + post_pad) {
-      accum_scale -= in[(head - size) * step] * in[(head - size) * step];
-      scale[(head - post_pad) * step] = 1. + accum_scale * alpha;
-      ++head;
-    }
+__global__ void KeBilinearInterpFw(const real* in,
+                                   const size_t inImgH,
+                                   const size_t inImgW,
+                                   const size_t inputH,
+                                   const size_t inputW,
+                                   real* out,
+                                   const size_t outImgH,
+                                   const size_t outImgW,
+                                   const size_t outputH,
+                                   const size_t outputW,
+                                   const size_t numChannels,
+                                   const real ratioH,
+                                   const real ratioW) {
+  int nthreads = outputH * outputW;                      
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < nthreads) {
+    int outIdH = tid / outputW;
+    int outIdW = tid % outputW;
+    int inImgSize = inputW / numChannels;
+    int outImgSize = outputW / numChannels;
+    int channelId = outIdW / outImgSize;
+
+    int outImgIdy = (outIdW % outImgSize) / outImgW;
+    int inImgIdy = ratioH * outImgIdy;
+    int hId = (inImgIdy < inImgH - 1) ? 1 : 0;
+    real h1lambda = ratioH * outImgIdy - inImgIdy;
+    real h2lambda = 1.f - h1lambda;
+
+    int outImgIdx = tid % outImgW;
+    int inImgIdx = ratioW * outImgIdx;
+    int wId = (inImgIdx < inImgW - 1) ? 1 : 0;
+    real w1lambda = ratioW * outImgIdx - inImgIdx;
+    real w2lambda = 1.f - w1lambda;
+
+    const real* inPos =
+      &in[outIdH * inputW + channelId * inImgSize + inImgIdy * inImgW + inImgIdx];
+
+    // bilinear interpolation
+    out[outIdH * outputW + outIdW] =
+      h2lambda * (w2lambda * inPos[0]            + w1lambda * inPos[wId]) + 
+      h1lambda * (w2lambda * inPos[hId * inImgW] + w1lambda * inPos[hId * inImgW + wId]);
   }
 }
 
- __global__ void KeCMRNormOutput(size_t nthreads, const real* in,
-                                 const real* scale, real negative_beta,
-                                 real* out) {
-  size_t index = threadIdx.x + blockIdx.x * blockDim.x;
-  if (index < nthreads) {
-    out[index] = in[index] * pow(scale[index], negative_beta);
+void hl_bilinear_forward(const real* inData,
+                         const size_t inImgH,
+                         const size_t inImgW,
+                         const size_t inputH,
+                         const size_t inputW,
+                         real* outData,
+                         const size_t outImgH,
+                         const size_t outImgW,
+                         const size_t outputH,
+                         const size_t outputW,
+                         const size_t numChannels,
+                         const real ratioH,
+                         const real ratioW) {
+  int threadNum = outputH * outputW;
+  int blocks = (threadNum + 1024 - 1) / 1024;
+
+  KeBilinearInterpFw<<< blocks, 1024, 0, STREAM_DEFAULT>>>(
+    inData, inImgH, inImgW, inputH, inputW, outData, outImgH,
+    outImgW, outputH, outputW, numChannels, ratioH, ratioW);
+  CHECK_SYNC("hl_bilinear_forward failed");
+}
+
+__global__ void KeBilinearInterpBw(real* in,
+                                   const size_t inImgH,
+                                   const size_t inImgW,
+                                   const size_t inputH,
+                                   const size_t inputW,
+                                   const real* out,
+                                   const size_t outImgH,
+                                   const size_t outImgW,
+                                   const size_t outputH,
+                                   const size_t outputW,
+                                   const size_t numChannels,
+                                   const real ratioH,
+                                   const real ratioW) {
+  int nthreads = outputH * outputW;
+  int tid = blockIdx.x * blockDim.x + threadIdx.x;
+  if (tid < nthreads) {
+    int outIdH = tid / outputW;
+    int outIdW = tid % outputW;
+    int inImgSize = inputW / numChannels;
+    int outImgSize = outputW / numChannels;
+    int channelId = outIdW / outImgSize;
+
+    int outImgIdy = (outIdW % outImgSize) / outImgW;
+    int inImgIdy = ratioH * outImgIdy;
+    int hId = (inImgIdy < inImgH - 1) ? 1 : 0;
+    real h1lambda = ratioH * outImgIdy - inImgIdy;
+    real h2lambda = 1.f - h1lambda;
+
+    int outImgIdx = tid % outImgW;
+    int inImgIdx = ratioW * outImgIdx;
+    int wId = (inImgIdx < inImgW - 1) ? 1 : 0;
+    real w1lambda = ratioW * outImgIdx - inImgIdx;
+    real w2lambda = 1.f - w1lambda;
+
+    real* inPos =
+      &in[outIdH * inputW + channelId * inImgSize + inImgIdy * inImgW + inImgIdx];
+    const real* outPos = &out[outIdH * outputW + outIdW];
+    paddle::paddleAtomicAdd(&inPos[0], h2lambda * w2lambda * outPos[0]);
+    paddle::paddleAtomicAdd(&inPos[wId], h2lambda * w1lambda * outPos[0]);
+    paddle::paddleAtomicAdd(&inPos[hId * inImgW], h1lambda * w2lambda * outPos[0]);
+    paddle::paddleAtomicAdd(&inPos[hId * inImgW + wId], h1lambda * w1lambda * outPos[0]);
   }
 }
 
-void hl_CMRNorm_forward(size_t frameCnt, const real* in, real* scale,
-                        real* out, size_t channels,
-                        size_t height, size_t width, size_t sizeX,
-                        real alpha, real beta) {
-  size_t threadsNum = frameCnt * height * width;
-  size_t blocksX = (threadsNum + 1024 - 1) / 1024;
-  size_t blocksY = 1;
-  dim3 threads(1024, 1);
-  dim3 grid(blocksX, blocksY);
+void hl_bilinear_backward(real* inGrad,
+                          const size_t inImgH,
+                          const size_t inImgW,
+                          const size_t inputH,
+                          const size_t inputW,
+                          const real* outGrad,
+                          const size_t outImgH,
+                          const size_t outImgW,
+                          const size_t outputH,
+                          const size_t outputW,
+                          const size_t numChannels,
+                          const real ratioH,
+                          const real ratioW) {
+  int threadNum = outputH * outputW;
+  int blocks = (threadNum + 1024 - 1) / 1024;
 
-  KeCMRNormFillScale<<<grid, threads, 0, STREAM_DEFAULT>>>
-      (threadsNum, in, scale, channels, height, width, sizeX, alpha);
-
-  threadsNum = frameCnt * height * width *channels;
-  blocksX = (threadsNum + 1024 -1) / 1024;
-  dim3 threads2(1024, 1);
-  dim3 grid2(blocksX, blocksY);
-  KeCMRNormOutput<<<grid2, threads2, 0, STREAM_DEFAULT>>>
-           (threadsNum, in, scale, beta, out);
-  CHECK_SYNC("hl_CMRNorm_forward");
-}
-
-__global__ void KeCMRNormDiff(size_t nthreads, const real* bottom_data,
-                              const real* top_data, const real* scale,
-                              const real* top_diff, size_t channels,
-                              size_t height, size_t width, size_t size,
-                              real negative_beta, real cache_ratio,
-                              real* bottom_diff ) {
-  int index = threadIdx.x + blockIdx.x * blockDim.x;
-  if (index < nthreads) {
-    // find out the local offset
-    size_t w = index % width;
-    size_t h = (index / width) % height;
-    size_t n = index / width / height;
-    size_t offset = (n * channels * height + h) * width + w;
-    size_t step = height * width;
-    bottom_data += offset;
-    top_data += offset;
-    scale += offset;
-    top_diff += offset;
-    bottom_diff += offset;
-    int head = 0;
-    int pre_pad = size - (size + 1) / 2;
-    int post_pad = size - pre_pad - 1;
-    real accum_ratio = 0;
-    // accumulate values
-    while (head < post_pad) {
-      accum_ratio += top_diff[head * step] *
-        top_data[head * step] / scale[head * step];
-      ++head;
-    }
-    // until we reach size, nothing needs to be subtracted
-    while (head < size) {
-      accum_ratio += top_diff[head * step] *
-        top_data[head * step] / scale[head * step];
-      bottom_diff[(head - post_pad) * step] +=
-        top_diff[(head - post_pad) * step] *
-        pow(scale[(head - post_pad) * step], negative_beta) - cache_ratio *
-        bottom_data[(head - post_pad) * step] * accum_ratio;
-      ++head;
-    }
-    // both add and subtract
-    while (head < channels) {
-      accum_ratio += top_diff[head * step] * top_data[head * step] /
-          scale[head * step];
-      accum_ratio -= top_diff[(head - size) * step] *
-          top_data[(head - size) * step] / scale[(head - size) * step];
-      bottom_diff[(head - post_pad) * step] +=
-        top_diff[(head - post_pad) * step] *
-        pow(scale[(head - post_pad) * step], negative_beta) - cache_ratio *
-        bottom_data[(head - post_pad) * step] * accum_ratio;
-      ++head;
-    }
-    // subtract only
-    while (head < channels + post_pad) {
-      accum_ratio -= top_diff[(head - size) * step] *
-          top_data[(head - size) * step] / scale[(head - size) * step];
-      bottom_diff[(head - post_pad) * step] +=
-        top_diff[(head - post_pad) * step] *
-        pow(scale[(head - post_pad) * step], negative_beta) - cache_ratio *
-        bottom_data[(head - post_pad) * step] * accum_ratio;
-      ++head;
-    }
-  }
-}
-
-void hl_CMRNorm_backward(size_t frameCnt, const real* inV,
-                         const real* scale,
-                         const real* outV, const real* outDiff,
-                         real *inDiff, size_t channels,
-                         size_t height, size_t width, size_t sizeX,
-                         real alpha, real beta) {
-  size_t threadsNum = frameCnt * height * width;
-  size_t blocksX = (threadsNum + 1024 -1) / 1024;
-  size_t blocksY = 1;
-  dim3 threads(1024, 1);
-  dim3 grid(blocksX, blocksY);
-  KeCMRNormDiff <<<grid, threads, 0, STREAM_DEFAULT>>>
-           (threadsNum, inV, outV, scale, outDiff, channels,
-           height, width, sizeX, alpha, beta, inDiff);
-  CHECK_SYNC("hl_CMRNorm_backward");
+  KeBilinearInterpBw<<< blocks, 1024, 0, STREAM_DEFAULT>>>(
+    inGrad, inImgH, inImgW, inputH, inputW, outGrad, outImgH,
+    outImgW, outputH, outputW, numChannels, ratioH, ratioW);
+  CHECK_SYNC("hl_bilinear_backward failed");
 }
 
 __global__ void maxoutFpCompute(size_t nthreads, const real * inData,

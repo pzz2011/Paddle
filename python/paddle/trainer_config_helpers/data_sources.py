@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -11,7 +11,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 """
 Data Sources are helpers to define paddle training data or testing data.
 """
@@ -26,8 +25,12 @@ except ImportError:
 __all__ = ['define_py_data_sources2']
 
 
-def define_py_data_source(file_list, cls, module,
-                          obj, args=None, async=False,
+def define_py_data_source(file_list,
+                          cls,
+                          module,
+                          obj,
+                          args=None,
+                          async=False,
                           data_cls=PyData):
     """
     Define a python data source.
@@ -55,8 +58,8 @@ def define_py_data_source(file_list, cls, module,
     :param obj: python object name. May be a function name if using
                 PyDataProviderWrapper.
     :type obj: basestring
-    :param args: The best practice is using dict to pass arguments into 
-                 DataProvider, and use :code:`@init_hook_wrapper` to 
+    :param args: The best practice is using dict to pass arguments into
+                 DataProvider, and use :code:`@init_hook_wrapper` to
                  receive arguments.
     :type args: string or picklable object
     :param async: Load Data asynchronously or not.
@@ -66,7 +69,7 @@ def define_py_data_source(file_list, cls, module,
     """
     if isinstance(file_list, list):
         file_list_name = 'train.list'
-        if isinstance(cls, TestData):
+        if cls == TestData:
             file_list_name = 'test.list'
         with open(file_list_name, 'w') as f:
             f.writelines(file_list)
@@ -75,33 +78,27 @@ def define_py_data_source(file_list, cls, module,
     if not isinstance(args, basestring) and args is not None:
         args = pickle.dumps(args, 0)
 
-    if data_cls is None:
-        def py_data2(files, load_data_module, load_data_object, load_data_args,
-                    **kwargs):
-            data = DataBase()
-            data.type = 'py2'
-            data.files = files
-            data.load_data_module = load_data_module
-            data.load_data_object = load_data_object
-            data.load_data_args = load_data_args
-            data.async_load_data = True
-            return data
-        data_cls = py_data2
-
-    cls(data_cls(files=file_list,
-                 load_data_module=module,
-                 load_data_object=obj,
-                 load_data_args=args,
-                 async_load_data=async))
+    cls(
+        data_cls(
+            files=file_list,
+            load_data_module=module,
+            load_data_object=obj,
+            load_data_args=args,
+            async_load_data=async))
 
 
-def define_py_data_sources(train_list, test_list, module, obj, args=None,
-                           train_async=False, data_cls=PyData):
+def define_py_data_sources(train_list,
+                           test_list,
+                           module,
+                           obj,
+                           args=None,
+                           train_async=False,
+                           data_cls=PyData):
     """
     The annotation is almost the same as define_py_data_sources2, except that
     it can specific train_async and data_cls.
 
-    :param data_cls: 
+    :param data_cls:
     :param train_list: Train list name.
     :type train_list: basestring
     :param test_list: Test list name.
@@ -114,8 +111,8 @@ def define_py_data_sources(train_list, test_list, module, obj, args=None,
                 a tuple or list to this argument.
     :type obj: basestring or tuple or list
     :param args: The best practice is using dict() to pass arguments into
-                 DataProvider, and use :code:`@init_hook_wrapper` to receive 
-                 arguments. If train and test is different, then pass a tuple 
+                 DataProvider, and use :code:`@init_hook_wrapper` to receive
+                 arguments. If train and test is different, then pass a tuple
                  or list to this argument.
     :type args: string or picklable object or list or tuple.
     :param train_async: Is training data load asynchronously or not.
@@ -125,8 +122,8 @@ def define_py_data_sources(train_list, test_list, module, obj, args=None,
     """
 
     def __is_splitable__(o):
-        return (isinstance(o, list) or isinstance(o, tuple)
-                ) and hasattr(o, '__len__') and len(o) == 2
+        return (isinstance(o, list) or
+                isinstance(o, tuple)) and hasattr(o, '__len__') and len(o) == 2
 
     assert train_list is not None or test_list is not None
     assert module is not None and obj is not None
@@ -139,7 +136,7 @@ def define_py_data_sources(train_list, test_list, module, obj, args=None,
     test_obj = obj
     train_obj = obj
     if __is_splitable__(obj):
-        train_module, test_module = module
+        train_obj, test_obj = obj
 
     if args is None:
         args = ""
@@ -166,16 +163,15 @@ def define_py_data_sources2(train_list, test_list, module, obj, args=None):
 
     ..  code-block:: python
 
-        define_py_data_sources2(train_list="train.list", 
-                                test_list="test.list", 
+        define_py_data_sources2(train_list="train.list",
+                                test_list="test.list",
                                 module="data_provider"
                                 # if train/test use different configurations,
                                 # obj=["process_train", "process_test"]
-                                obj="process", 
+                                obj="process",
                                 args={"dictionary": dict_name})
 
-    The related data provider can refer to 
-    `here <../../data_provider/pydataprovider2.html#dataprovider-for-the-sequential-model>`__.
+    The related data provider can refer to :ref:`api_pydataprovider2_sequential_model` .
 
     :param train_list: Train list name.
     :type train_list: basestring
@@ -189,16 +185,29 @@ def define_py_data_sources2(train_list, test_list, module, obj, args=None):
                 a tuple or list to this argument.
     :type obj: basestring or tuple or list
     :param args: The best practice is using dict() to pass arguments into
-                 DataProvider, and use :code:`@init_hook_wrapper` to receive 
-                 arguments. If train and test is different, then pass a tuple 
+                 DataProvider, and use :code:`@init_hook_wrapper` to receive
+                 arguments. If train and test is different, then pass a tuple
                  or list to this argument.
     :type args: string or picklable object or list or tuple.
     :return: None
     :rtype: None
     """
-    define_py_data_sources(train_list=train_list,
-                           test_list=test_list,
-                           module=module,
-                           obj=obj,
-                           args=args,
-                           data_cls=None)
+
+    def py_data2(files, load_data_module, load_data_object, load_data_args,
+                 **kwargs):
+        data = create_data_config_proto()
+        data.type = 'py2'
+        data.files = files
+        data.load_data_module = load_data_module
+        data.load_data_object = load_data_object
+        data.load_data_args = load_data_args
+        data.async_load_data = False
+        return data
+
+    define_py_data_sources(
+        train_list=train_list,
+        test_list=test_list,
+        module=module,
+        obj=obj,
+        args=args,
+        data_cls=py_data2)

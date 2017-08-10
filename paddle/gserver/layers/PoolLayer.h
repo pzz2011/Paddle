@@ -1,4 +1,4 @@
-/* Copyright (c) 2016 Baidu, Inc. All Rights Reserve.
+/* Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserve.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -12,12 +12,12 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License. */
 
-
 #pragma once
 
-#include "Layer.h"
-#include "paddle/math/Matrix.h"
 #include <vector>
+#include "Layer.h"
+#include "paddle/math/MathUtils.h"
+#include "paddle/math/Matrix.h"
 
 namespace paddle {
 
@@ -46,17 +46,8 @@ public:
    */
   static Layer* create(const LayerConfig& config);
 
-  virtual bool init(const LayerMap& layerMap, const ParameterMap& parameterMap);
-
-  /**
-   * Calculate output size according window size and padding size.
-   */
-  int outputSize(int imageSize, int windowSize, int padding, int stride) {
-    int outputSize;
-    outputSize =
-        (imageSize - windowSize + 2 * padding + stride - 1) / stride + 1;
-    return outputSize;
-  }
+  bool init(const LayerMap& layerMap,
+            const ParameterMap& parameterMap) override;
 };
 
 }  // namespace paddle

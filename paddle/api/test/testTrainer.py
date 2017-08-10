@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,9 +17,9 @@ from paddle.trainer.config_parser import logger
 from py_paddle import swig_paddle
 import util
 
+
 def main():
-    trainer_config = parse_config(
-        "./testTrainConfig.py", "")
+    trainer_config = parse_config("./testTrainConfig.py", "")
     model = swig_paddle.GradientMachine.createFromConfigProto(
         trainer_config.model_config)
     trainer = swig_paddle.Trainer.create(trainer_config, model)
@@ -56,7 +56,7 @@ def main():
         logger.info('test cost=%f' % (cost / num))
 
     trainer.finishTrain()
- 
+
 
 if __name__ == '__main__':
     swig_paddle.initPaddle("--use_gpu=0", "--trainer_count=1")

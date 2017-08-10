@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ class TestArguments(unittest.TestCase):
         args = swig_paddle.Arguments.createArguments(1)
         args.setSlotValue(0, m)
 
+        self.assertAlmostEqual(27.0, args.sum())
+
         mat = args.getSlotValue(0)
         assert isinstance(mat, swig_paddle.Matrix)
         np_mat = mat.toNumpyMatInplace()
@@ -32,7 +34,7 @@ class TestArguments(unittest.TestCase):
         iv = args.getSlotIds(0)
         assert isinstance(iv, swig_paddle.IVector)
         np_arr = iv.toNumpyArrayInplace()
-        self.assertEqual(np_arr.shape, (6,))
+        self.assertEqual(np_arr.shape, (6, ))
 
 
 if __name__ == '__main__':

@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -13,9 +13,9 @@
 # limitations under the License.
 
 o = open("./" + "train.list", "w")
-o.write("./data/raw_data/train" +"\n")
+o.write("./data/raw_data/train" + "\n")
 o.close()
 
 o = open("./" + "test.list", "w")
-o.write("./data/raw_data/t10k" +"\n")
+o.write("./data/raw_data/t10k" + "\n")
 o.close()

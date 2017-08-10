@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -17,11 +17,10 @@ from paddle.proto.DataConfig_pb2 import DataConfig
 g_config = None
 
 
-def SimpleData(
-        files=None,
-        feat_dim=None,
-        context_len=None,
-        buffer_capacity=None):
+def SimpleData(files=None,
+               feat_dim=None,
+               context_len=None,
+               buffer_capacity=None):
 
     data_config = DataConfig()
     data_config.type = 'simple'
@@ -32,6 +31,7 @@ def SimpleData(
     if buffer_capacity:
         data_config.buffer_capacity = buffer_capacity
     return data_config
+
 
 def get_config_funcs(trainer_config):
     global g_config

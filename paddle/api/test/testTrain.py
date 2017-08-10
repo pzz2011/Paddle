@@ -1,4 +1,4 @@
-# Copyright (c) 2016 Baidu, Inc. All Rights Reserved
+# Copyright (c) 2016 PaddlePaddle Authors. All Rights Reserved
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -89,16 +89,22 @@ def main():
             except Exception as e:
                 print e
 
+        ev = m.makeEvaluator()
+        ev.start()
         m.forwardBackward(inArgs, outArgs, swig_paddle.PASS_TRAIN,
                           update_callback)
-
+        m.eval(ev)
+        ev.finish()
+        for name in ev.getNames():
+            print name, ev.getValue(name)
         for optimizer in optimizers:
             optimizer.finishBatch()
 
         cost_vec = outArgs.getSlotValue(0)
         assert isinstance(cost_vec, swig_paddle.Matrix)
         cost_vec = cost_vec.copyToNumpyMat()
-        print 'Finish Batch', batch_id, 'with cost ', cost_vec.sum() / batch_size
+        print 'Finish Batch', batch_id, 'with cost ', cost_vec.sum(
+        ) / batch_size
         batch_id += 1
 
     for optimizer in optimizers:
